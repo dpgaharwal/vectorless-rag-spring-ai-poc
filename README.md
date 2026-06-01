@@ -3,11 +3,7 @@
 > A research-grade Proof of Concept demonstrating **tree-based, vectorless Retrieval-Augmented Generation** natively implemented in Spring AI, with a fully working side-by-side benchmark against traditional vector RAG — including a real-time comparison UI.
 
 
-
-
-<img width="1084" height="1251" alt="Screenshot 2026-06-01 at 10 54 47 PM" src="https://github.com/user-attachments/assets/77d5d385-2b03-431a-9500-03606ab0183d" />
-
-
+<img width="996" height="1301" alt="img" src="https://github.com/user-attachments/assets/9241b15e-636c-4a85-83f9-6d88ce452943" />
 
 
 ---
