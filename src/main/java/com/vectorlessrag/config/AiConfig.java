@@ -1,6 +1,7 @@
 package com.vectorlessrag.config;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -37,7 +38,7 @@ public class AiConfig {
 
   @Bean
   public ChatClient chatClient(
-      @Qualifier("openAiChatModel") OpenAiChatModel chatModel) {
+          @Qualifier("ollamaChatModel") ChatModel chatModel) {
     return ChatClient.builder(chatModel)
         .defaultSystem("You are a precise document analysis assistant.")
         .build();
@@ -46,7 +47,7 @@ public class AiConfig {
   @Bean
   @Primary
   public EmbeddingModel embeddingModel(
-      @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel) {
+          @Qualifier("ollamaEmbeddingModel") EmbeddingModel embeddingModel) {
     return embeddingModel;
   }
 }
