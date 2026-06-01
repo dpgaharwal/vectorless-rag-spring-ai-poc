@@ -1,0 +1,30 @@
+# Claude
+.claude/
+
+# Local environment files
+.env
+.env.*
+
+# Application secrets (only if you keep secrets locally)
+application-local.yml
+application-local.yaml
+application-dev.yml
+application-dev.yaml
+
+# Generated files
+tree-store/
+
+# Test/sample documents
+test-doc.pdf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+.idea/
+target/
+HELP.md
