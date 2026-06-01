@@ -1,6 +1,23 @@
 # Vectorless RAG POC — Spring AI Native Implementation
 
-> A research-grade Proof of Concept demonstrating **tree-based, vectorless Retrieval-Augmented Generation** natively implemented in Spring AI, with a side-by-side benchmark against traditional vector RAG.
+> A research-grade Proof of Concept demonstrating **tree-based, vectorless Retrieval-Augmented Generation** natively implemented in Spring AI, with a fully working side-by-side benchmark against traditional vector RAG — including a real-time comparison UI.
+
+---
+
+## ⚠️ LLM Provider Note
+
+This POC has been architected to support **four LLM providers** — OpenAI, Ollama, Gemini, and Claude Anthropic — with zero code changes required to switch between them. Configuration is the only thing that needs to change.
+
+**End-to-end testing was performed with OpenAI (gpt-4o-mini) and Ollama (llama3.2 on Apple Silicon).**
+
+| Provider | Status | Notes |
+|---|---|---|
+| **OpenAI** | ✅ Tested & Working | Primary provider used for validation |
+| **Ollama (llama3.2)** | ✅ Tested & Working | Recommended on Apple Silicon — fast via Metal GPU |
+| Gemini (gemini-2.0-flash) | ⚠️ Provisioned | Free tier quota exhausted during development |
+| Claude Anthropic | ⚠️ Provisioned | API key not configured during development |
+
+> **Known issue:** Spring AI versions 1.1.1–1.1.5 have a bug where an empty `extra_body` field is serialized into OpenAI API requests, causing a `400 Unrecognized request argument` error. This project uses Spring AI **1.1.6** where the fix is included.
 
 ---
 
@@ -10,36 +27,39 @@ This project started with a simple question — **is there a better way to do RA
 
 Traditional RAG is the industry default. It works. But when you look closely at how it retrieves information, there are real problems that nobody talks about enough: it chunks documents arbitrarily, it finds text that is semantically similar rather than answer-containing, and it gives you zero visibility into why a particular chunk was selected.
 
-This POC implements **Vectorless RAG** — an alternative approach inspired by [PageIndex by VectifyAI](https://github.com/VectifyAI/PageIndex) — where retrieval is driven by **LLM reasoning over a document's hierarchical structure** instead of vector similarity. The entire algorithm is implemented natively in Java using Spring AI, with a benchmark endpoint that runs both pipelines on the same query so you can compare results directly.
+This POC implements **Vectorless RAG** — an alternative approach inspired by [PageIndex by VectifyAI](https://github.com/VectifyAI/PageIndex) — where retrieval is driven by **LLM reasoning over a document's hierarchical structure** instead of vector similarity. The entire algorithm (tree building, tree storage, recursive tree navigation) is implemented natively in Java using Spring AI — something that did not previously exist in the Java ecosystem.
+
+A fully working **Vector RAG pipeline** runs in parallel, enabling direct benchmarking of both approaches on the same query, same document, same LLM.
 
 ---
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        REST API Layer                           │
-│              BenchmarkController (/api/rag/*)                   │
-└───────────────────┬────────────────────────┬────────────────────┘
-                    │                        │
-       ┌────────────▼──────────┐  ┌──────────▼──────────────┐
-       │  Vectorless Pipeline  │  │   Vector RAG Pipeline   │
-       │                       │  │                         │
-       │  PDF → Tree Building  │  │  PDF → Chunking         │
-       │  Tree Storage         │  │  Embedding              │
-       │  LLM Tree Navigation  │  │  pgvector similarity    │
-       └────────────┬──────────┘  └──────────┬──────────────┘
-                    │                        │
-       ┌────────────▼────────────────────────▼──────────────┐
-       │                    LLM Layer                        │
-       │         Ollama / Gemini / Claude (switchable)       │
-       └─────────────────────────────────────────────────────┘
-                    │
-       ┌────────────▼──────────────────────────────────────┐
-       │               Storage Layer                        │
-       │   Tree JSON (disk + in-memory cache)               │
-       │   pgvector (PostgreSQL) for Vector RAG             │
-       └───────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         REST API Layer                           │
+│               BenchmarkController (/api/rag/*)                   │
+└────────────────────┬─────────────────────────┬───────────────────┘
+                     │                         │
+        ┌────────────▼──────────┐   ┌──────────▼──────────────┐
+        │  Vectorless Pipeline  │   │   Vector RAG Pipeline   │
+        │                       │   │                         │
+        │  DocumentIndexService │   │  VectorRagPipeline      │
+        │  TreeBuilder          │   │  TokenTextSplitter      │
+        │  TreeStore            │   │  pgvector + embeddings  │
+        │  TreeDocumentRetriever│   │  similarity search      │
+        └────────────┬──────────┘   └──────────┬──────────────┘
+                     │                         │
+        ┌────────────▼─────────────────────────▼──────────────┐
+        │                     LLM Layer                        │
+        │      OpenAI / Ollama / Gemini / Claude (switchable)  │
+        └──────────────────────────────────────────────────────┘
+                     │
+        ┌────────────▼──────────────────────────────────────┐
+        │                  Storage Layer                     │
+        │   Tree JSON — disk file + in-memory ConcurrentMap  │
+        │   pgvector (PostgreSQL) — vector embeddings store  │
+        └────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -56,11 +76,11 @@ Traditional RAG is a two-phase pipeline: an offline indexing phase where the doc
 PDF Document
      ↓
 Split into fixed-size chunks
-(e.g. every 500 tokens, with 50-token overlap)
+(500 tokens, 50-token overlap via TokenTextSplitter)
      ↓
 Each chunk → Embedding Model → float[] vector
      ↓
-Store (chunk text + vector) in vector database (pgvector)
+Store (chunk text + vector) in pgvector
 ```
 
 **Query Phase (done per query):**
@@ -72,20 +92,18 @@ Query → Embedding Model → float[] vector
      ↓
 Cosine similarity search across all stored vectors
      ↓
-Top-K most similar chunks retrieved
+Top-K most similar chunks retrieved (K=5)
      ↓
 Chunks stuffed into prompt → LLM → Answer
 ```
 
 ### What Works Well
 
-For simple, factual questions over short documents, traditional RAG performs well. The pipeline is well-understood, has mature tooling, and works out of the box with Spring AI's `RetrievalAugmentationAdvisor`.
+For simple, factual questions over short documents, traditional RAG performs well. The pipeline is well-understood, has mature tooling, and integrates directly with Spring AI's `VectorStore` abstraction.
 
 ### Where It Breaks Down
 
-The deeper you look, the more cracks appear:
-
-**Problem 1 — Chunking is arbitrary.** Splitting every 500 tokens has no awareness of document structure. A paragraph about revenue gets split in the middle. A table header ends up in one chunk and the table data in another. The document's natural boundaries — sections, subsections, headings — are completely ignored.
+**Problem 1 — Chunking is arbitrary.** Splitting every 500 tokens has no awareness of document structure. A paragraph gets split in the middle. A table header ends up in one chunk and the table data in another. The document's natural boundaries — sections, subsections, headings — are completely ignored.
 
 **Problem 2 — Similarity is not the same as relevance.** Cosine similarity finds chunks that are semantically close to the query. But semantically close does not mean answer-containing. If you ask "what was the Q3 revenue?", a chunk discussing "annual revenue trends" might score higher than the chunk that actually has the Q3 number.
 
@@ -110,9 +128,10 @@ The inspiration is PageIndex — an open-source Python library from VectifyAI. T
 ```
 PDF Document
      ↓
-Extract pages — one page = one unit of content
+Spring AI PagePdfDocumentReader → List<String>
+(one page = one unit of content)
      ↓
-LLM analyzes page summaries → builds Hierarchical Tree
+LLM analyzes page summaries → builds Hierarchical Tree JSON
 
 Document Root (pages 0-100)
 ├── Introduction (pages 0-5)
@@ -127,8 +146,9 @@ Document Root (pages 0-100)
 └── Conclusion (pages 71-100)
 
      ↓
-Tree persisted to disk as JSON + loaded into memory
-(built once, reused for all future queries)
+Tree persisted to disk as JSON (tree-store/{docId}.json)
++ loaded into in-memory ConcurrentHashMap cache
+(built once, reused for ALL future queries — idempotent)
 ```
 
 **Query Phase (done per query):**
@@ -136,36 +156,45 @@ Tree persisted to disk as JSON + loaded into memory
 ```
 User Query: "What was the Q3 revenue?"
      ↓
-LLM receives tree structure (titles + one-line summaries only)
+TreeDocumentRetriever.retrieve(query)
      ↓
-LLM reasons: "Q3 revenue → navigate to Results → Q3 Performance"
+LLM receives tree node titles + one-line summaries only
+(NOT full page content — keeps navigation prompt small)
      ↓
-LLM receives children of "Results" node
+LLM reasons: "Q3 revenue → navigate to Results"
+→ node_id picked, navigate into "Results" children
      ↓
 LLM reasons: "Q3 Performance (pages 59-70) is the right section"
+→ leaf node reached
      ↓
-Pages 59-70 fetched directly by page range
+Pages 59-70 fetched directly by page range [startIndex, endIndex)
      ↓
-Pages stuffed into prompt → LLM → Answer
+Pages + query → LLM → Answer + nodePath trace
 ```
 
-### Why This Is Different
+### The Navigation Algorithm
 
-The retrieval is a **guided navigation** — like using a table of contents — not a similarity search. The LLM is not finding text that sounds like the query. It is reasoning about document structure to find the section that *contains* the answer.
+The retrieval is a **recursive tree traversal** — conceptually similar to how AlphaGo uses a policy network to pick moves rather than brute-forcing every position.
 
-This is similar in spirit to how AlphaGo uses a policy network to decide which moves to explore, rather than brute-forcing every possible position. Instead of scanning all chunks with cosine similarity, the model uses reasoning to navigate directly to the relevant section.
+```
+navigateTree(rootNode, query, depth=0)
+  ├── if leaf node OR depth >= MAX_DEPTH(3) → return node
+  ├── LLM call: given these child nodes + query, pick one node_id
+  ├── find child by node_id
+  └── navigateTree(chosenChild, query, depth+1)  [recursive]
+```
 
-Each level of the tree is one LLM call. With a maximum depth of 3, any query requires at most 3 LLM navigation calls — regardless of document size.
+Each recursion level = one LLM call. With MAX_DEPTH=3, any query makes at most **3 LLM navigation calls** regardless of document size. The LLM only sees node titles and summaries — not full page content — so each navigation call is fast and cheap.
 
 ### What This Solves
 
-**Chunking** — Documents are indexed by their natural structure, not by arbitrary token counts. A section stays together. A table stays together. Cross-references within a section are preserved.
+**Chunking** — Documents are indexed by their natural structure, not arbitrary token counts. A section stays together. A table stays together. Cross-references within a section are preserved.
 
 **Relevance** — The LLM navigates to the section most likely to *contain* the answer, not the section most *similar* to the query. For structured documents this is a meaningful difference.
 
-**Explainability** — Every query produces a `nodePath` — the exact sequence of sections the retrieval traversed. You can see "the answer came from Results → Q3 Performance → pages 59-70" which is impossible with vector RAG.
+**Explainability** — Every query produces a `nodePath` — the exact sequence of sections traversed. "Answer came from Results → Q3 Performance → pages 59-70" is impossible with vector RAG.
 
-**Cost** — No embedding model is required. The tree is built once. Navigation uses lightweight LLM calls on short prompts (titles and one-line summaries only, not full content).
+**Cost** — No embedding model required. Tree built once. Navigation uses short-prompt LLM calls (titles + summaries only).
 
 ---
 
@@ -173,26 +202,91 @@ Each level of the tree is one LLM call. With a maximum depth of 3, any query req
 
 | | Traditional RAG | Vectorless RAG |
 |---|---|---|
-| Indexing strategy | Split by token count | Split by document structure |
-| Retrieval mechanism | Cosine similarity search | LLM reasoning + tree navigation |
-| Vector database | ✅ Required | ❌ Not required |
+| Indexing strategy | Split by token count (arbitrary) | Split by document structure (natural) |
+| Retrieval mechanism | Cosine similarity search | LLM reasoning + recursive tree navigation |
+| Vector database | ✅ Required (pgvector) | ❌ Not required |
 | Embedding model | ✅ Required at index + query time | ❌ Not required |
-| Explainability | ❌ No visibility into why chunks were chosen | ✅ Full navigation path returned |
-| Cross-section context | ❌ Chunks are isolated | ✅ Sections are structurally aware |
-| Best suited for | General-purpose, short documents | Structured documents with clear hierarchy |
-| Cold start cost | Higher — embed all chunks | Lower — one LLM call to build tree |
+| Explainability | ❌ Black box — no visibility | ✅ Full node path returned per query |
+| Cross-section context | ❌ Chunks are isolated fragments | ✅ Sections are structurally coherent |
+| Best suited for | General-purpose, short/flat documents | Structured docs with clear hierarchy |
+| Cold start cost | Higher — embed all chunks upfront | Lower — one LLM call to build tree |
+| Per-query LLM calls | 1 (answer generation) | 1–3 (navigation) + 1 (answer generation) |
+
+---
+
+## Real Benchmark Results
+
+Tested on a 4-page PDF (Accelio PDF bookmark sample), query: *"What is this document about?"*
+
+```json
+{
+  "query": "What is this document about?",
+  "vectorless_rag": {
+    "answer": "This document demonstrates the functionality of primary and secondary bookmarks in a PDF file, created using Accelio Present Central 5.4 and Output Designer 5.4.",
+    "pagesRetrieved": 2,
+    "nodePath": ["Main content", "Sample files"],
+    "totalTimeMs": 5711,
+    "vectorDbUsed": false,
+    "explainable": true
+  },
+  "vector_rag": {
+    "answer": "This document is a technical sample related to creating and managing bookmarks in PDF files using Accelio Present Output Designer software.",
+    "chunksRetrieved": 5,
+    "nodePath": [],
+    "totalTimeMs": 5807,
+    "vectorDbUsed": true,
+    "explainable": false
+  }
+}
+```
+
+Key observation — `nodePath: ["Main content", "Sample files"]` shows exactly which tree nodes the vectorless pipeline traversed to reach the answer. Vector RAG has no equivalent trace.
 
 ---
 
 ## Multi-LLM Support
 
-All three providers are configured simultaneously. Switching requires zero business logic change:
+All four providers are configured simultaneously. Switching requires **one line change** in `AiConfig.java`:
 
-| Provider | Model | Use Case |
-|---|---|---|
-| Ollama | llama3.2 | Local dev, no API cost, Apple Silicon recommended |
-| Gemini | gemini-2.0-flash | Free tier, fast for POC demos |
-| Claude | claude-haiku-4-5 | Production quality, most capable |
+| Provider | Qualifier | Model | Tested |
+|---|---|---|---|
+| OpenAI | `openAiChatModel` | gpt-4o-mini | ✅ |
+| Ollama | `ollamaChatModel` | llama3.2 | ✅ (Apple Silicon) |
+| Gemini | `googleGenAiChatModel` | gemini-2.0-flash | ⚠️ Provisioned |
+| Claude | `anthropicChatModel` | claude-haiku-4-5 | ⚠️ Provisioned |
+
+### Switching Providers
+
+**Step 1 — Change qualifier in `AiConfig.java`:**
+```java
+// OpenAI
+@Qualifier("openAiChatModel")
+
+// Ollama (recommended for local dev on Mac)
+@Qualifier("ollamaChatModel")
+
+// Gemini
+@Qualifier("googleGenAiChatModel")
+
+// Claude
+@Qualifier("anthropicChatModel")
+```
+
+**Step 2 — Set API key in `application.yml`:**
+```yaml
+spring.ai.openai.api-key: your-key         # OpenAI
+spring.ai.google.genai.api-key: your-key   # Gemini
+spring.ai.anthropic.api-key: your-key      # Claude
+spring.ai.ollama.base-url: http://localhost:11434  # Ollama — no key needed
+```
+
+**For Ollama on Mac (Apple Silicon):**
+```bash
+brew install ollama
+ollama serve
+ollama pull llama3.2
+ollama pull nomic-embed-text   # for vector RAG embeddings
+```
 
 ---
 
@@ -200,65 +294,154 @@ All three providers are configured simultaneously. Switching requires zero busin
 
 | Layer | Technology |
 |---|---|
-| Framework | Spring Boot 3.3.5 |
-| AI Framework | Spring AI 1.1.4 |
-| PDF Parsing | Spring AI PagePdfDocumentReader (PDFBox) |
-| Vector Store | pgvector (PostgreSQL extension) |
-| Local LLM | Ollama (Docker) |
-| Tree Persistence | Jackson JSON + disk |
+| Framework | Spring Boot 3.4.5 |
+| AI Framework | Spring AI 1.1.6 |
+| PDF Parsing | Spring AI PagePdfDocumentReader (Apache PDFBox) |
+| Vector Store | pgvector (PostgreSQL 16 extension) |
+| Local LLM | Ollama (native on Mac, Docker on Windows/Linux) |
+| Tree Persistence | Jackson JSON serialization + disk + ConcurrentHashMap |
+| Build | Maven 3.8+ |
 | Java | 21 |
+
+---
+
+## Project Structure
+
+```
+vectorless-rag-poc/
+├── src/main/java/com/vectorlessrag/
+│   ├── config/
+│   │   ├── AiConfig.java           # LLM provider wiring + qualifier
+│   │   └── CorsConfig.java         # CORS for demo UI
+│   ├── controller/
+│   │   └── BenchmarkController.java  # REST endpoints
+│   ├── pipeline/
+│   │   ├── DocumentIndexService.java  # Orchestrates both pipelines
+│   │   └── VectorRagPipeline.java     # Traditional RAG (chunk → embed → store → retrieve)
+│   ├── retriever/
+│   │   └── TreeDocumentRetriever.java # Core vectorless retrieval algorithm
+│   └── tree/
+│       ├── TreeBuilder.java           # LLM-driven tree construction from pages
+│       ├── TreeNode.java              # Recursive tree data model
+│       └── TreeStore.java             # Two-tier persistence (disk + memory)
+├── rag-demo.html                      # Standalone comparison UI (drag & drop)
+├── docker-compose.yml                 # pgvector + Ollama
+├── pom.xml
+└── src/main/resources/
+    └── application.yml
+```
+
+---
+
+## Prerequisites
+
+```
+Java 21+
+Maven 3.8+
+Docker Desktop
+OpenAI API key OR Ollama installed (Mac recommended for Ollama)
+```
 
 ---
 
 ## How to Run
 
+### Mac (with Ollama — recommended)
+
 ```bash
-# 1. Start infrastructure
+# 1. Install and start Ollama
+brew install ollama
+ollama serve
+
+# 2. Pull models (new terminal tab)
+ollama pull llama3.2
+ollama pull nomic-embed-text
+
+# 3. Start pgvector
+docker run -d --name pgvector \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=vectorrag \
+  -p 5432:5432 \
+  pgvector/pgvector:pg16
+
+docker exec -it pgvector psql -U postgres -d vectorrag \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# 4. Set qualifier to Ollama in AiConfig.java, then run
+mvn spring-boot:run
+```
+
+### Windows / Linux (with Docker)
+
+```bash
+# 1. Start all infrastructure
 docker-compose up -d
+
+# Pull Ollama model inside container
 docker exec -it ollama ollama pull llama3.2
+docker exec -it ollama ollama pull nomic-embed-text
+
+# Create pgvector extension
 docker exec -it pgvector psql -U postgres -d vectorrag \
   -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
 # 2. Run application
 mvn spring-boot:run
+```
 
-# 3. Index a document
-curl -X POST "http://localhost:8080/api/rag/index?pdfPath=/path/to/doc.pdf"
+> **Windows note:** pgvector runs on port 5433 in docker-compose (to avoid conflict with any local PostgreSQL on 5432). Update `application.yml` datasource URL accordingly.
 
-# 4. Query vectorless pipeline
-curl "http://localhost:8080/api/rag/vectorless/query?query=what+is+the+refund+policy&documentId=doc"
+---
 
-# 5. Benchmark both pipelines
-curl "http://localhost:8080/api/rag/benchmark?query=what+is+revenue+for+Q3&documentId=doc"
+## API Reference
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/rag/index` | Index a PDF — extracts pages, builds tree, chunks for vector store |
+| `GET` | `/api/rag/vectorless/query` | Query via tree navigation only |
+| `GET` | `/api/rag/benchmark` | Run query through BOTH pipelines, return side-by-side results |
+
+### Parameters
+
+**`/api/rag/index`**
+- `pdfPath` — absolute path to PDF on the server machine
+
+**`/api/rag/vectorless/query`** and **`/api/rag/benchmark`**
+- `query` — question to answer
+- `documentId` — document ID returned from the index call
+
+### Example Calls
+
+```bash
+# Index
+curl -X POST "http://localhost:8080/api/rag/index?pdfPath=/Users/you/docs/report.pdf"
+
+# Vectorless query only
+curl "http://localhost:8080/api/rag/vectorless/query?query=what+is+the+Q3+revenue&documentId=report"
+
+# Full benchmark — both pipelines
+curl "http://localhost:8080/api/rag/benchmark?query=what+is+the+Q3+revenue&documentId=report"
 ```
 
 ---
 
-## Sample Benchmark Response
+## Comparison Demo UI
 
-```json
-{
-  "query": "What are the key safety evaluations?",
-  "vectorless_rag": {
-    "answer": "The model underwent RLHF-based safety training including...",
-    "pagesRetrieved": 3,
-    "nodePath": ["Safety & Alignment", "Evaluation Methods", "Red Teaming"],
-    "totalTimeMs": 1840,
-    "vectorDbUsed": false,
-    "explainable": true
-  },
-  "vector_rag": {
-    "answer": "Safety evaluations included...",
-    "pagesRetrieved": 5,
-    "nodePath": [],
-    "totalTimeMs": 620,
-    "vectorDbUsed": true,
-    "explainable": false
-  }
-}
-```
+The project includes `rag-demo.html` — a standalone dark-themed UI that runs both pipelines simultaneously and animates the retrieval process.
 
-The `nodePath` field is the differentiator — vectorless RAG shows exactly which sections were traversed. Vector RAG cannot provide this.
+**How to use:**
+1. Make sure Spring Boot is running on port 8080
+2. Open `rag-demo.html` directly in your browser
+3. Drag and drop (or click to select) your PDF
+4. Edit the path field to the **absolute path** of your PDF on disk
+5. Type a query and click **Run**
+
+**What you'll see:**
+- Left panel — Tree navigation animating node by node, LLM picks shown in real time
+- Right panel — Chunk scanning with similarity scores appearing one by one
+- Benchmark results — side-by-side answers, latency bars, node path trace, explainability badge
+
+> CORS must be enabled on the Spring Boot server. `CorsConfig.java` handles this — it's included in the project.
 
 ---
 
@@ -266,27 +449,20 @@ The `nodePath` field is the differentiator — vectorless RAG shows exactly whic
 
 **Why build this in Java instead of using Python PageIndex?**
 
-The Python PageIndex SDK handles everything in 3 lines — tree building, storage, and retrieval are hidden inside the library. This Java implementation required building each component from scratch: understanding the algorithm deeply, designing the data structures, and wiring it into Spring AI's retrieval contract. Production Java backends cannot call a Python sidecar for every query — native Spring AI integration means zero cross-language overhead and direct enterprise integration.
+The Python PageIndex SDK handles everything in 3 lines — tree building, storage, and retrieval are hidden inside the library. Building it natively in Spring AI required implementing the full algorithm from scratch: tree construction, recursive LLM navigation, page-range fetching, two-tier persistence. This demonstrates deep understanding of the algorithm, not just library usage. Production Java backends cannot call a Python sidecar for every query — native Spring AI integration means zero cross-language overhead and direct enterprise integration.
 
 **What is the actual difference in retrieval quality?**
 
-Vector RAG finds text that is semantically similar to the query. Vectorless RAG finds text that is structurally relevant — the LLM navigates to the section most likely to contain the answer. For structured documents like financial reports, technical specifications, and legal documents, this is a meaningful and measurable difference.
+Vector RAG finds text that is semantically *similar* to the query. Vectorless RAG finds text that is structurally *relevant* — the LLM navigates to the section most likely to *contain* the answer. For structured documents like financial reports, technical specifications, and legal documents with clear section hierarchy, this is a meaningful and measurable difference.
 
 **How does this scale?**
 
-The tree is built once at index time and cached on disk. Per-query cost is 1-3 lightweight LLM calls for navigation on short prompts — no embedding model, no vector DB on the retrieval path. The idempotent indexing design means the same document can be re-queried indefinitely without rebuilding the tree.
+The tree is built once at index time and cached on disk. Re-indexing the same document is a no-op — the cached tree is reloaded. Per-query cost is 1–3 lightweight LLM navigation calls on short prompts (node titles and summaries only, not full page content), plus one answer generation call. The vector DB and embedding model are completely absent from the retrieval path.
 
 ---
 
-## Current Status
+## Inspired By
 
-| Feature | Status |
-|---|---|
-| PDF ingestion and page extraction | ✅ Complete |
-| LLM-driven hierarchical tree building | ✅ Complete |
-| Tree persistence (disk + in-memory cache) | ✅ Complete |
-| Recursive LLM tree navigation | ✅ Complete |
-| Multi-LLM support (Ollama / Gemini / Claude) | ✅ Complete |
-| REST API with benchmark endpoint | ✅ Complete |
-| Vector RAG comparison pipeline | 🔄 In Progress |
-| Quantitative benchmark metrics | 🔄 In Progress |
+[PageIndex by VectifyAI](https://github.com/VectifyAI/PageIndex) — the original Python implementation of vectorless RAG that inspired this Java port.
+
+This project is the first known native Java/Spring AI implementation of the PageIndex algorithm.
