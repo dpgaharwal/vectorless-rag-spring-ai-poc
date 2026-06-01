@@ -1,6 +1,7 @@
 package com.vectorlessrag.controller;
 
 import com.vectorlessrag.pipeline.DocumentIndexService;
+import com.vectorlessrag.pipeline.VectorRagPipeline;
 import com.vectorlessrag.retriever.TreeDocumentRetriever;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,6 +30,7 @@ public class BenchmarkController {
   private final DocumentIndexService documentIndexService;
   private final TreeDocumentRetriever treeDocumentRetriever;
   private final ChatClient chatClient;
+  private final VectorRagPipeline vectorRagPipeline;
 
   // 1. Index a PDF
   @PostMapping("/index")
@@ -106,54 +108,60 @@ public class BenchmarkController {
   }
 
   // 3. Benchmark — both pipelines, same query
-
   @GetMapping("/benchmark")
   public ResponseEntity<Map<String, Object>> benchmark(
-      @RequestParam String query, @RequestParam String documentId) {
+          @RequestParam String query,
+          @RequestParam String documentId) {
     try {
-      // Vectorless RAG
+      // ── Vectorless RAG ──
       treeDocumentRetriever.activeDocument(documentId);
-
       Instant v1Start = Instant.now();
-      List<Document> vectorlessPages =
-          treeDocumentRetriever.retrieve(Query.builder().text(query).build());
-      String vectorlessContext =
-          vectorlessPages.stream().map(Document::getText).reduce("", (a, b) -> a + "\n\n" + b);
+      List<Document> vectorlessPages = treeDocumentRetriever.retrieve(
+              Query.builder().text(query).build());
+      String vectorlessContext = vectorlessPages.stream()
+              .map(Document::getText)
+              .reduce("", (a, b) -> a + "\n\n" + b);
       String vectorlessAnswer = generateAnswer(query, vectorlessContext);
       long vectorlessMs = Duration.between(v1Start, Instant.now()).toMillis();
 
-      // Source trace — key advantage of vectorless
-      List<String> nodePath =
-          vectorlessPages.stream()
+      List<String> nodePath = vectorlessPages.stream()
               .map(d -> d.getMetadata().getOrDefault("node_title", "?").toString())
               .distinct()
               .toList();
 
-      return ResponseEntity.ok(
-          Map.of(
-              "query",
-              query,
-              "vectorless_rag",
-              Map.of(
-                  "answer",
-                  vectorlessAnswer,
-                  "pagesRetrieved",
-                  vectorlessPages.size(),
-                  "nodePath",
-                  nodePath,
-                  "totalTimeMs",
-                  vectorlessMs,
-                  "vectorDbUsed",
-                  false,
-                  "explainable",
-                  true),
-              "note",
-              "Add vector RAG pipeline result here after step 8"));
+      // ── Vector RAG ──
+      Instant v2Start = Instant.now();
+      List<Document> vectorChunks = vectorRagPipeline.retrieve(query, documentId);
+      String vectorContext = vectorChunks.stream()
+              .map(Document::getText)
+              .reduce("", (a, b) -> a + "\n\n" + b);
+      String vectorAnswer = generateAnswer(query, vectorContext);
+      long vectorMs = Duration.between(v2Start, Instant.now()).toMillis();
+
+      return ResponseEntity.ok(Map.of(
+              "query", query,
+              "vectorless_rag", Map.of(
+                      "answer", vectorlessAnswer,
+                      "pagesRetrieved", vectorlessPages.size(),
+                      "nodePath", nodePath,
+                      "totalTimeMs", vectorlessMs,
+                      "vectorDbUsed", false,
+                      "explainable", true
+              ),
+              "vector_rag", Map.of(
+                      "answer", vectorAnswer,
+                      "chunksRetrieved", vectorChunks.size(),
+                      "nodePath", List.of(),
+                      "totalTimeMs", vectorMs,
+                      "vectorDbUsed", true,
+                      "explainable", false
+              )
+      ));
 
     } catch (Exception e) {
       log.error("Benchmark failed: {}", e.getMessage());
       return ResponseEntity.internalServerError()
-          .body(Map.of("status", "error", "message", e.getMessage()));
+              .body(Map.of("status", "error", "message", e.getMessage()));
     }
   }
 

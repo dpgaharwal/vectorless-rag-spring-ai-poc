@@ -3,7 +3,7 @@ spring:
     name: vectorless-rag-poc
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/vectorrag
+    url: jdbc:postgresql://localhost:5432/vectorrag
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -14,7 +14,7 @@ spring:
     open-in-view: false
 
   ai:
-    active-provider: openai
+    active-provider: ollama
 
     ollama:
       base-url: http://localhost:11434
@@ -22,6 +22,8 @@ spring:
         model: llama3.2
         options:
           temperature: 0.2
+      embedding:
+        model: nomic-embed-text
 
     google:
       genai:
@@ -39,7 +41,7 @@ spring:
           temperature: 0.2
 
     openai:
-      api-key: "api-key"
+      api-key: ${OPENAI_API_KEY:your-openai-key-here}
       base-url: https://api.openai.com
       chat:
         options:

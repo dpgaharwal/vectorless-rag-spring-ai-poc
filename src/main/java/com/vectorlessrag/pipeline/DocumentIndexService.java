@@ -23,34 +23,30 @@ public class DocumentIndexService {
   private final TreeBuilder treeBuilder;
   private final TreeStore treeStore;
   private final TreeDocumentRetriever treeDocumentRetriever;
+  private final VectorRagPipeline vectorRagPipeline;
 
-  /** Full pipeline: PDF → parse pages → build tree → store → load into retriever */
   public String indexDocument(Path pdfPath) throws IOException {
-    String documentId =
-        pdfPath.getFileName().toString().replace(".pdf", "").replaceAll("[^a-zA-Z0-9_-]", "_");
+    String documentId = pdfPath.getFileName().toString()
+            .replace(".pdf", "")
+            .replaceAll("[^a-zA-Z0-9_-]", "_");
 
     log.info("Indexing document: {}", documentId);
 
-    // Check if already indexed — skip rebuild
-    if (treeStore.exists(documentId)) {
-      log.info("Tree already exists for: {}. Loading from store.", documentId);
-      List<String> pages = extractPages(pdfPath);
-      treeDocumentRetriever.loadDocument(documentId, pages);
-      return documentId;
-    }
-
-    // Step 1 — Extract pages via Spring AI PdfDocumentReader
     List<String> pages = extractPages(pdfPath);
     log.info("Extracted {} pages from PDF", pages.size());
 
-    // Step 2 — Build tree (LLM call)
-    TreeNode root = treeBuilder.build(pages);
+    // Vectorless RAG — build tree
+    if (treeStore.exists(documentId)) {
+      log.info("Tree already exists for: {}. Loading from store.", documentId);
+      treeDocumentRetriever.loadDocument(documentId, pages);
+    } else {
+      TreeNode root = treeBuilder.build(pages);
+      treeStore.save(documentId, root);
+      treeDocumentRetriever.loadDocument(documentId, pages);
+    }
 
-    // Step 3 — Store tree
-    treeStore.save(documentId, root);
-
-    // Step 4 — Load into retriever
-    treeDocumentRetriever.loadDocument(documentId, pages);
+    // Vector RAG — chunk + embed + store
+    vectorRagPipeline.indexDocument(pdfPath, documentId);  // ← ADD
 
     log.info("Document indexed successfully: {}", documentId);
     return documentId;
