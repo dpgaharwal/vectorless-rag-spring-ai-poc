@@ -13,6 +13,11 @@ application-dev.yaml
 
 # Generated files
 tree-store/
+pageindex-store/
+results/
+
+# Planning docs (local only)
+implementation_plan.md
 
 # Test/sample documents
 test-doc.pdf

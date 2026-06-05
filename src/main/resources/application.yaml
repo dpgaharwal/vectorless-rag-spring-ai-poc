@@ -1,71 +1,44 @@
-spring:
-  application:
-    name: vectorless-rag-poc
+# pageindex-spring-ai — sample configuration
+# Copy these properties into your application.yaml and set your API key.
+#
+# The library requires only a Spring AI ChatModel bean in the context.
+# Add whichever provider starter you prefer to your pom.xml, e.g.:
+#   spring-ai-starter-model-openai
+#   spring-ai-starter-model-anthropic
+#   spring-ai-starter-model-ollama
+#   spring-ai-starter-model-google-genai
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/vectorrag
-    username: postgres
-    password: postgres
-    driver-class-name: org.postgresql.Driver
+pageindex:
+  # LLM model used for indexing (tree building, TOC processing, verification)
+  model: gpt-4o-2024-11-20
+  # LLM model used for retrieval navigation (defaults to 'model' if not set)
+  # retrieve-model: gpt-4o-mini
+  # How many pages from the start to scan for a Table of Contents
+  toc-check-page-num: 20
+  # Max pages per leaf node before recursive splitting kicks in
+  max-page-num-each-node: 10
+  # Max tokens per leaf node before recursive splitting kicks in
+  max-token-num-each-node: 20000
+  # Assign sequential 4-digit IDs to every node (e.g. "0001")
+  add-node-id: true
+  # Generate LLM summaries for every node
+  add-node-summary: true
+  # Generate a one-line description of the whole document
+  add-doc-description: false
+  # Include raw page text inside each node in the stored JSON
+  add-node-text: false
+  # Directory where indexed document JSON files are persisted
+  store-dir: pageindex-store/
+  # Thread pool size for concurrent LLM calls during indexing
+  concurrency:
+    pool-size: 10
 
-  jpa:
-    hibernate:
-      ddl-auto: update
-    open-in-view: false
-
-  ai:
-    active-provider: ollama
-
-    ollama:
-      base-url: http://localhost:11434
-      chat:
-        model: llama3.2
-        options:
-          temperature: 0.2
-      embedding:
-        model: nomic-embed-text
-
-    google:
-      genai:
-        api-key: ${GEMINI_API_KEY:your-gemini-key-here}
-        chat:
-          options:
-            model: gemini-2.0-flash
-            temperature: 0.2
-
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:your-claude-key-here}
-      chat:
-        options:
-          model: claude-sonnet-4-20250514
-          temperature: 0.2
-
-    openai:
-      api-key: ${OPENAI_API_KEY:your-openai-key-here}
-      base-url: https://api.openai.com
-      chat:
-        options:
-          model: gpt-4o-mini
-          temperature: 0.2
-          stream-usage: false
-
-    vectorstore:
-      pgvector:
-        initialize-schema: true
-        index-type: HNSW
-        distance-type: COSINE_DISTANCE
-        dimensions: 768
-
-vectorless:
-  tree:
-    max-pages-per-node: 10
-    toc-check-pages: 20
-    store-dir: tree-store/
-
-server:
-  port: 8080
-
-logging:
-  level:
-    com.vectorlessrag: DEBUG
-    org.springframework.ai: INFO
+# Example OpenAI provider config (add spring-ai-starter-model-openai to pom.xml)
+# spring:
+#   ai:
+#     openai:
+#       api-key: ${OPENAI_API_KEY}
+#       chat:
+#         options:
+#           model: gpt-4o-2024-11-20
+#           temperature: 0.2
