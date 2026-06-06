@@ -10,11 +10,13 @@ import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@ConditionalOnBean(VectorStore.class)
 @RequiredArgsConstructor
 public class VectorRagPipeline {
 

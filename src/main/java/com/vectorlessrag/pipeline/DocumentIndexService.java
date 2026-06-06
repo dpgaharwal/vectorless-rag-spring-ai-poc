@@ -12,7 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -23,7 +25,10 @@ public class DocumentIndexService {
   private final TreeBuilder treeBuilder;
   private final TreeStore treeStore;
   private final TreeDocumentRetriever treeDocumentRetriever;
-  private final VectorRagPipeline vectorRagPipeline;
+
+  @Nullable
+  @Autowired(required = false)
+  private VectorRagPipeline vectorRagPipeline;
 
   public String indexDocument(Path pdfPath) throws IOException {
     String documentId = pdfPath.getFileName().toString()
@@ -45,8 +50,12 @@ public class DocumentIndexService {
       treeDocumentRetriever.loadDocument(documentId, pages);
     }
 
-    // Vector RAG — chunk + embed + store
-    vectorRagPipeline.indexDocument(pdfPath, documentId);  // ← ADD
+    // Vector RAG — chunk + embed + store (only when postgres/pgvector is available)
+    if (vectorRagPipeline != null) {
+      vectorRagPipeline.indexDocument(pdfPath, documentId);
+    } else {
+      log.info("pgvector not configured — skipping vector indexing for: {}", documentId);
+    }
 
     log.info("Document indexed successfully: {}", documentId);
     return documentId;

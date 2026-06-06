@@ -14,7 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,7 +32,10 @@ public class BenchmarkController {
   private final DocumentIndexService documentIndexService;
   private final TreeDocumentRetriever treeDocumentRetriever;
   private final ChatClient chatClient;
-  private final VectorRagPipeline vectorRagPipeline;
+
+  @Nullable
+  @Autowired(required = false)
+  private VectorRagPipeline vectorRagPipeline;
 
   // 1. Index a PDF
   @PostMapping("/index")
@@ -131,11 +136,13 @@ public class BenchmarkController {
 
       // ── Vector RAG ──
       Instant v2Start = Instant.now();
-      List<Document> vectorChunks = vectorRagPipeline.retrieve(query, documentId);
+      List<Document> vectorChunks = vectorRagPipeline != null
+              ? vectorRagPipeline.retrieve(query, documentId) : List.of();
       String vectorContext = vectorChunks.stream()
               .map(Document::getText)
               .reduce("", (a, b) -> a + "\n\n" + b);
-      String vectorAnswer = generateAnswer(query, vectorContext);
+      String vectorAnswer = vectorRagPipeline != null
+              ? generateAnswer(query, vectorContext) : "pgvector not configured.";
       long vectorMs = Duration.between(v2Start, Instant.now()).toMillis();
 
       return ResponseEntity.ok(Map.of(

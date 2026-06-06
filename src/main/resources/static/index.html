@@ -3,585 +3,31 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RAG Comparison Demo — Vectorless vs Vector</title>
-  <style>
-    /* ─── Reset & Variables ──────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:           #0a0a0f;
-      --surface:      #12121a;
-      --surface2:     #1a1a28;
-      --surface3:     #22223a;
-      --border:       #2a2a40;
-      --border-bright:#3a3a58;
-      --text:         #e8e8f0;
-      --text-muted:   #888899;
-      --text-dim:     #555566;
-      --teal:         #00d4a0;
-      --teal-dim:     #00d4a022;
-      --teal-mid:     #00d4a055;
-      --blue:         #4d9fff;
-      --blue-dim:     #4d9fff22;
-      --blue-mid:     #4d9fff55;
-      --yellow:       #ffd85c;
-      --red:          #ff6b6b;
-      --green:        #5cffa0;
-      --radius:       12px;
-      --radius-sm:    8px;
-      --shadow:       0 4px 24px rgba(0,0,0,0.5);
-      --shadow-lg:    0 8px 48px rgba(0,0,0,0.7);
-    }
-
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    /* ─── Scrollbar ──────────────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--surface); }
-    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
-    /* ─── Layout ─────────────────────────────────────────────────────────── */
-    .app {
-      max-width: 1600px;
-      margin: 0 auto;
-      padding: 24px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    /* ─── Header ─────────────────────────────────────────────────────────── */
-    .header {
-      text-align: center;
-      padding: 32px 20px 20px;
-    }
-    .header-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 40px;
-      padding: 6px 16px;
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-      letter-spacing: 0.5px;
-    }
-    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse-dot 2s infinite; }
-    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .header h1 {
-      font-size: clamp(24px, 4vw, 42px);
-      font-weight: 800;
-      letter-spacing: -1px;
-      line-height: 1.1;
-    }
-    .header h1 .teal { color: var(--teal); }
-    .header h1 .blue { color: var(--blue); }
-    .header p {
-      margin-top: 12px;
-      color: var(--text-muted);
-      font-size: 15px;
-      max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
-      line-height: 1.6;
-    }
-
-    /* ─── Cards ──────────────────────────────────────────────────────────── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      box-shadow: var(--shadow);
-    }
-    .card-title {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .card-title .icon { font-size: 15px; }
-
-    /* ─── Form Controls ──────────────────────────────────────────────────── */
-    .control-row {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      flex-wrap: wrap;
-    }
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      flex: 1;
-      min-width: 200px;
-    }
-    .field label {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-    input, select {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      padding: 10px 14px;
-      font-size: 14px;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
-      width: 100%;
-    }
-    input:focus, select:focus {
-      border-color: var(--teal);
-      box-shadow: 0 0 0 3px var(--teal-dim);
-    }
-    input[type="password"] { letter-spacing: 2px; }
-    select option { background: var(--surface2); }
-
-    /* ─── Buttons ────────────────────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 20px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s;
-      white-space: nowrap;
-      font-family: inherit;
-    }
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-    .btn-primary {
-      background: var(--teal);
-      color: #000;
-    }
-    .btn-primary:hover:not(:disabled) {
-      background: #00f0b8;
-      box-shadow: 0 0 20px var(--teal-mid);
-    }
-    .btn-blue {
-      background: var(--blue);
-      color: #000;
-    }
-    .btn-blue:hover:not(:disabled) {
-      background: #70b5ff;
-      box-shadow: 0 0 20px var(--blue-mid);
-    }
-    .btn-ghost {
-      background: var(--surface2);
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover:not(:disabled) {
-      background: var(--surface3);
-      border-color: var(--border-bright);
-    }
-    .btn-sm { padding: 7px 14px; font-size: 13px; }
-
-    /* ─── Status indicator ───────────────────────────────────────────────── */
-    .status-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 12px;
-      font-size: 13px;
-    }
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--red);
-      flex-shrink: 0;
-    }
-    .status-dot.ok { background: var(--green); animation: pulse-dot 2s infinite; }
-    .status-text { color: var(--text-muted); }
-
-    /* ─── Comparison Grid ────────────────────────────────────────────────── */
-    .comparison-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    @media (max-width: 900px) { .comparison-grid { grid-template-columns: 1fr; } }
-
-    /* ─── Pipeline Panel ─────────────────────────────────────────────────── */
-    .pipeline-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      min-height: 500px;
-      box-shadow: var(--shadow);
-    }
-    .pipeline-panel.teal { border-top: 3px solid var(--teal); }
-    .pipeline-panel.blue { border-top: 3px solid var(--blue); }
-
-    .panel-header {
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .panel-header.teal { background: linear-gradient(135deg, var(--teal-dim), transparent); }
-    .panel-header.blue { background: linear-gradient(135deg, var(--blue-dim), transparent); }
-    .panel-icon {
-      width: 40px; height: 40px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-    .panel-icon.teal { background: var(--teal-dim); border: 1px solid var(--teal-mid); }
-    .panel-icon.blue { background: var(--blue-dim); border: 1px solid var(--blue-mid); }
-    .panel-title { font-size: 15px; font-weight: 700; }
-    .panel-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .panel-spinner {
-      margin-left: auto;
-      width: 20px; height: 20px;
-      border: 2px solid var(--border);
-      border-radius: 50%;
-      display: none;
-    }
-    .panel-spinner.teal { border-top-color: var(--teal); }
-    .panel-spinner.blue { border-top-color: var(--blue); }
-    .panel-spinner.active {
-      display: block;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .panel-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      max-height: 600px;
-    }
-
-    /* ─── Step Items ─────────────────────────────────────────────────────── */
-    .step-list { display: flex; flex-direction: column; gap: 8px; }
-    .step-item {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      animation: step-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    }
-    @keyframes step-enter {
-      from { opacity: 0; transform: translateY(12px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0)   scale(1); }
-    }
-    .step-item.teal { border-left: 3px solid var(--teal); }
-    .step-item.blue { border-left: 3px solid var(--blue); }
-    .step-item.answer { border-color: var(--yellow); background: color-mix(in srgb, var(--yellow) 6%, var(--surface2)); }
-    .step-item.error  { border-color: var(--red);    background: color-mix(in srgb, var(--red)    6%, var(--surface2)); }
-    .step-item.complete { border-color: var(--green); background: color-mix(in srgb, var(--green) 5%, var(--surface2)); }
-
-    .step-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-      margin-top: 1px;
-      line-height: 1;
-    }
-    .step-content { flex: 1; min-width: 0; }
-    .step-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      line-height: 1.3;
-    }
-    .step-detail {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 4px;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-    .step-detail.code {
-      font-family: 'Courier New', monospace;
-      background: var(--surface3);
-      padding: 6px 8px;
-      border-radius: 4px;
-      margin-top: 6px;
-      white-space: pre-wrap;
-      font-size: 11px;
-    }
-    .step-num {
-      font-size: 10px;
-      color: var(--text-dim);
-      flex-shrink: 0;
-      margin-top: 3px;
-      min-width: 20px;
-      text-align: right;
-    }
-
-    /* ─── Tree Visualization ─────────────────────────────────────────────── */
-    .tree-container {
-      margin-top: 8px;
-      padding: 4px 0;
-    }
-    .tree-node {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 6px 8px;
-      margin: 3px 0;
-      border-radius: 6px;
-      animation: step-enter 0.35s ease both;
-    }
-    .tree-node.root {
-      background: var(--teal-dim);
-      border: 1px solid var(--teal-mid);
-    }
-    .tree-node.child {
-      background: var(--surface3);
-      border: 1px solid var(--border);
-      margin-left: 24px;
-    }
-    .tree-node-bullet {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 5px;
-    }
-    .tree-node.root .tree-node-bullet { background: var(--teal); }
-    .tree-node.child .tree-node-bullet { background: var(--text-dim); width: 6px; height: 6px; margin-top: 6px; }
-    .tree-node-info { flex: 1; min-width: 0; }
-    .tree-node-title { font-size: 12px; font-weight: 600; color: var(--text); }
-    .tree-node-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .tree-node-pages {
-      font-size: 10px;
-      background: var(--surface3);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 2px 6px;
-      white-space: nowrap;
-      color: var(--text-muted);
-    }
-
-    /* ─── Chunk Visualization ────────────────────────────────────────────── */
-    .chunk-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 8px;
-      border-radius: 6px;
-      margin: 2px 0;
-      animation: step-enter 0.3s ease both;
-      background: var(--blue-dim);
-      border: 1px solid var(--blue-mid);
-    }
-    .chunk-num { font-size: 10px; color: var(--blue); font-weight: 700; min-width: 24px; }
-    .chunk-text { font-size: 11px; color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
-
-    /* ─── Score Bar ──────────────────────────────────────────────────────── */
-    .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
-    .score-bar {
-      height: 6px; border-radius: 3px;
-      background: linear-gradient(90deg, var(--blue), var(--teal));
-      animation: bar-grow 0.6s ease both;
-      transform-origin: left;
-    }
-    @keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-    .score-val { font-size: 11px; font-weight: 700; color: var(--blue); }
-
-    /* ─── Answer Panel ───────────────────────────────────────────────────── */
-    .answers-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    @media (max-width: 900px) { .answers-grid { grid-template-columns: 1fr; } }
-
-    .answer-box {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 18px;
-      position: relative;
-      overflow: hidden;
-    }
-    .answer-box::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-    }
-    .answer-box.teal::before { background: var(--teal); }
-    .answer-box.blue::before  { background: var(--blue); }
-    .answer-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 10px;
-    }
-    .answer-label.teal { color: var(--teal); }
-    .answer-label.blue { color: var(--blue); }
-    .answer-text {
-      font-size: 14px;
-      color: var(--text);
-      line-height: 1.7;
-      white-space: pre-wrap;
-    }
-    .answer-placeholder {
-      color: var(--text-dim);
-      font-size: 13px;
-      font-style: italic;
-    }
-
-    /* ─── Query Section ──────────────────────────────────────────────────── */
-    .query-row {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-    }
-    .query-row .field { flex: 1; }
-
-    /* ─── Progress bar ───────────────────────────────────────────────────── */
-    .progress-bar-wrap {
-      height: 3px;
-      background: var(--surface3);
-      border-radius: 2px;
-      overflow: hidden;
-      margin: 8px 0;
-      display: none;
-    }
-    .progress-bar-wrap.active { display: block; }
-    .progress-bar {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 0.4s ease;
-    }
-    .progress-bar.teal { background: linear-gradient(90deg, var(--teal), #00f0c0); }
-    .progress-bar.blue { background: linear-gradient(90deg, var(--blue), #80c0ff); }
-
-    /* ─── Phase Header ───────────────────────────────────────────────────── */
-    .phase-header {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 4px 8px;
-      border-radius: 4px;
-      margin-bottom: 4px;
-      display: inline-block;
-    }
-    .phase-header.teal { color: var(--teal); background: var(--teal-dim); }
-    .phase-header.blue { color: var(--blue); background: var(--blue-dim); }
-
-    /* ─── Notification ───────────────────────────────────────────────────── */
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 18px;
-      font-size: 14px;
-      box-shadow: var(--shadow-lg);
-      z-index: 1000;
-      animation: toast-in 0.3s ease;
-      max-width: 360px;
-    }
-    .toast.ok    { border-left: 3px solid var(--green); }
-    .toast.error { border-left: 3px solid var(--red); }
-    .toast.info  { border-left: 3px solid var(--blue); }
-    @keyframes toast-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-
-    /* ─── Misc ───────────────────────────────────────────────────────────── */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 4px 0;
-    }
-    .text-muted { color: var(--text-muted); font-size: 13px; }
-    .hidden { display: none !important; }
-    .gap-8 { gap: 8px; }
-    .flex { display: flex; }
-    .items-center { align-items: center; }
-    .justify-between { justify-content: space-between; }
-    .mb-8 { margin-bottom: 8px; }
-    .mt-8 { margin-top: 8px; }
-
-    /* ─── Empty State ────────────────────────────────────────────────────── */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px 20px;
-      color: var(--text-dim);
-      text-align: center;
-      gap: 10px;
-      height: 100%;
-    }
-    .empty-state .big-icon { font-size: 40px; opacity: 0.4; }
-    .empty-state p { font-size: 13px; line-height: 1.5; max-width: 200px; }
-
-    /* ─── Pulse animation for active steps ───────────────────────────────── */
-    @keyframes glow-teal {
-      0%,100% { box-shadow: 0 0 0 0 var(--teal-dim); }
-      50%      { box-shadow: 0 0 12px 2px var(--teal-mid); }
-    }
-    @keyframes glow-blue {
-      0%,100% { box-shadow: 0 0 0 0 var(--blue-dim); }
-      50%      { box-shadow: 0 0 12px 2px var(--blue-mid); }
-    }
-    .step-item.active-teal { animation: step-enter 0.4s ease both, glow-teal 1.5s 0.4s infinite; }
-    .step-item.active-blue  { animation: step-enter 0.4s ease both, glow-blue  1.5s 0.4s infinite; }
-  </style>
+  <title>RAG Pipeline Visualizer — Vectorless vs Vector</title>
+  <link rel="stylesheet" href="/css/rag.css" />
 </head>
 <body>
 <div class="app">
 
-  <!-- ─── Header ──────────────────────────────────────────────────────── -->
-  <div class="header">
+  <!-- ── Header ───────────────────────────────────────────── -->
+  <header class="site-header">
     <div class="header-badge">
       <span class="badge-dot"></span>
-      Live RAG Pipeline Comparison
+      Live RAG Pipeline Visualizer
     </div>
-    <h1>
-      <span class="teal">Vectorless</span> vs <span class="blue">Vector</span> RAG
-    </h1>
-    <p>Watch every micro-step of both pipelines side by side — from PDF parsing to final answer generation, with real-time SSE streaming.</p>
-  </div>
+    <h1><span class="c-teal">Vectorless</span> vs <span class="c-blue">Vector</span> RAG</h1>
+    <p>Watch every micro-step animated in real-time — tree navigation, chunk similarity, and exactly what goes in and out of the LLM.</p>
+  </header>
 
-  <!-- ─── Config Panel ────────────────────────────────────────────────── -->
-  <div class="card" id="configPanel">
-    <div class="card-title"><span class="icon">🔑</span> API Configuration</div>
+  <!-- ── Config Card ──────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">🔑 API Configuration</div>
     <div class="control-row">
       <div class="field">
         <label>OpenAI API Key</label>
-        <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off" />
+        <input type="password" id="apiKeyInput" placeholder="sk-…" autocomplete="off" />
       </div>
-      <div class="field" style="max-width:220px">
+      <div class="field" style="max-width:210px">
         <label>Model</label>
         <select id="modelSelect">
           <option value="gpt-4o-mini">gpt-4o-mini (fast)</option>
@@ -590,7 +36,7 @@
           <option value="gpt-3.5-turbo">gpt-3.5-turbo (cheap)</option>
         </select>
       </div>
-      <button class="btn btn-primary" id="configBtn" onclick="saveConfig()">Save Config</button>
+      <button class="btn btn-teal" id="configBtn" onclick="saveConfig()">Save Config</button>
     </div>
     <div class="status-row">
       <div class="status-dot" id="configStatus"></div>
@@ -598,580 +44,232 @@
     </div>
   </div>
 
-  <!-- ─── Upload Panel ────────────────────────────────────────────────── -->
-  <div class="card" id="uploadPanel">
-    <div class="card-title"><span class="icon">📄</span> Document Indexing</div>
+  <!-- ── Upload Card ──────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">📄 Document Indexing</div>
     <div class="control-row">
       <div class="field">
         <label>PDF File Path (absolute path on server)</label>
-        <input type="text" id="pdfPathInput" placeholder="e.g. C:/Documents/report.pdf or /home/user/doc.pdf" />
+        <input type="text" id="pdfPathInput" placeholder="e.g. /Users/you/report.pdf or C:\docs\report.pdf" />
       </div>
-      <button class="btn btn-primary" id="indexBtn" onclick="startIndexing()" disabled>
-        <span>Index Document</span>
-      </button>
-    </div>
-    <div class="progress-bar-wrap active" id="indexProgressWrap" style="display:none">
-      <div style="display:flex;gap:8px">
-        <div style="flex:1">
-          <div style="font-size:10px;color:var(--teal);margin-bottom:3px">Vectorless</div>
-          <div class="progress-bar-wrap active"><div class="progress-bar teal" id="progressTeal" style="width:0%"></div></div>
-        </div>
-        <div style="flex:1">
-          <div style="font-size:10px;color:var(--blue);margin-bottom:3px">Vector</div>
-          <div class="progress-bar-wrap active"><div class="progress-bar blue" id="progressBlue" style="width:0%"></div></div>
-        </div>
-      </div>
+      <button class="btn btn-teal" id="indexBtn" onclick="startIndexing()" disabled>Index Document</button>
     </div>
   </div>
 
-  <!-- ─── Main Comparison Area ─────────────────────────────────────────── -->
-  <div class="comparison-grid">
+  <!-- ══════════════════════════════════════════════════════════
+       PIPELINE COMPARISON GRID
+       ══════════════════════════════════════════════════════════ -->
+  <div class="pipeline-grid">
 
-    <!-- ── Vectorless Panel ── -->
-    <div class="pipeline-panel teal" id="vectorlessPanel">
+    <!-- ── Vectorless Panel ─────────────────────────────────── -->
+    <div class="pipeline-panel panel-teal">
+
       <div class="panel-header teal">
         <div class="panel-icon teal">🌿</div>
         <div>
           <div class="panel-title" style="color:var(--teal)">Vectorless RAG</div>
-          <div class="panel-subtitle">PageIndex — No embeddings, no vector DB</div>
+          <div class="panel-subtitle">PageIndex — LLM tree navigation, zero vector DB</div>
         </div>
         <div class="panel-spinner teal" id="spinnerTeal"></div>
       </div>
-      <div class="panel-body" id="vectorlessBody">
-        <div class="empty-state" id="vectorlessEmpty">
+
+      <!-- Flow bar -->
+      <div class="flow-bar" id="vlessFlowBar"></div>
+
+      <!-- Viz area: SVG tree -->
+      <div class="viz-area">
+        <div class="empty-viz" id="vlessEmptyViz">
           <div class="big-icon">🌿</div>
-          <p>Vectorless RAG pipeline will appear here after you index a document</p>
+          <p>Document tree will appear after indexing</p>
         </div>
-        <div class="step-list" id="vectorlessSteps" style="display:none"></div>
+        <div class="tree-scroll" id="treeScroll" style="display:none">
+          <svg id="treeSvg"></svg>
+        </div>
       </div>
+
+      <!-- Collapsible step log -->
+      <details class="log-details">
+        <summary>📋 Show Step Log</summary>
+        <div class="step-list" id="vlessLog"></div>
+      </details>
     </div>
 
-    <!-- ── Vector Panel ── -->
-    <div class="pipeline-panel blue" id="vectorPanel">
+    <!-- ── Vector Panel ──────────────────────────────────────── -->
+    <div class="pipeline-panel panel-blue">
+
       <div class="panel-header blue">
         <div class="panel-icon blue">🔵</div>
         <div>
           <div class="panel-title" style="color:var(--blue)">Vector RAG</div>
-          <div class="panel-subtitle">Chunk → Embed → SimpleVectorStore</div>
+          <div class="panel-subtitle">Chunk → Embed → SimpleVectorStore → Cosine Search</div>
         </div>
         <div class="panel-spinner blue" id="spinnerBlue"></div>
       </div>
-      <div class="panel-body" id="vectorBody">
-        <div class="empty-state" id="vectorEmpty">
+
+      <!-- Flow bar -->
+      <div class="flow-bar" id="vectFlowBar"></div>
+
+      <!-- Viz area: chunk cards + data journey -->
+      <div class="viz-area" style="display:flex;flex-direction:column;gap:10px">
+        <div class="empty-viz" id="vectEmptyViz">
           <div class="big-icon">🔵</div>
-          <p>Vector RAG pipeline will appear here after you index a document</p>
+          <p>Chunks will appear after indexing</p>
         </div>
-        <div class="step-list" id="vectorSteps" style="display:none"></div>
+        <div class="chunk-grid" id="chunkGrid"></div>
+        <div class="data-journey" id="dataJourney"></div>
       </div>
+
+      <!-- Collapsible step log -->
+      <details class="log-details">
+        <summary>📋 Show Step Log</summary>
+        <div class="step-list" id="vectLog"></div>
+      </details>
     </div>
 
   </div>
 
-  <!-- ─── Query Panel ──────────────────────────────────────────────────── -->
-  <div class="card" id="queryCard">
-    <div class="card-title"><span class="icon">💬</span> Ask a Question</div>
+  <!-- ── Query Card ───────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">💬 Ask a Question</div>
     <div class="query-row">
       <div class="field">
         <label>Question about the indexed document</label>
-        <input type="text" id="questionInput" placeholder="e.g. What are the main findings of this document?" disabled />
+        <input type="text" id="questionInput" placeholder="e.g. What are the main findings?" disabled />
       </div>
       <button class="btn btn-blue" id="queryBtn" onclick="runQuery()" disabled>Run Query</button>
     </div>
   </div>
 
-  <!-- ─── Results Panel ────────────────────────────────────────────────── -->
-  <div class="card hidden" id="resultsCard">
-    <div class="card-title"><span class="icon">✨</span> Final Answers</div>
-    <div class="answers-grid">
-      <div class="answer-box teal">
-        <div class="answer-label teal">Vectorless RAG (PageIndex)</div>
-        <div class="answer-text" id="vlessAnswer"><span class="answer-placeholder">Answer will appear here...</span></div>
+  <!-- ══════════════════════════════════════════════════════════
+       LLM INSPECTOR
+       ══════════════════════════════════════════════════════════ -->
+  <div class="llm-inspector">
+    <div class="inspector-header">
+      <span class="inspector-icon">🔬</span>
+      <h2>LLM Inspector — What We Sent &amp; What We Got</h2>
+      <span class="inspector-subtitle">Full prompt structure + raw response for both pipelines</span>
+    </div>
+
+    <div class="inspector-grid">
+
+      <!-- Vectorless Inspector Column -->
+      <div class="inspector-col">
+        <div class="inspector-col-title teal">🌿 Vectorless RAG</div>
+
+        <!-- WHAT WE SENT -->
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--teal);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <span>📤</span> What We Sent to LLM
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">System Prompt</div>
+          <pre class="prompt-text" id="vlessSysPrompt" style="max-height:60px;overflow:auto">—</pre>
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">
+            Context (page content)
+            <span class="token-badge" id="vlessTokenBadge"></span>
+          </div>
+          <div class="context-wrapper" id="vlessContextWrapper">
+            <pre class="context-text" id="vlessContextText">—</pre>
+            <div class="scan-line hidden" id="vlessScanLine"></div>
+          </div>
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">Question</div>
+          <pre class="prompt-text" id="vlessQuestion">—</pre>
+        </div>
+
+        <!-- WHAT WE GOT -->
+        <div class="inspector-divider"><span>📥 What LLM Returned</span></div>
+        <div class="response-box" id="vlessResponse">
+          <span class="response-placeholder">Waiting for LLM response…</span>
+        </div>
       </div>
-      <div class="answer-box blue">
-        <div class="answer-label blue">Vector RAG (SimpleVectorStore)</div>
-        <div class="answer-text" id="vectAnswer"><span class="answer-placeholder">Answer will appear here...</span></div>
+
+      <!-- Vector Inspector Column -->
+      <div class="inspector-col">
+        <div class="inspector-col-title blue">🔵 Vector RAG</div>
+
+        <!-- WHAT WE SENT -->
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--blue);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          <span>📤</span> What We Sent to LLM
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">System Prompt</div>
+          <pre class="prompt-text" id="vectSysPrompt" style="max-height:60px;overflow:auto">—</pre>
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">
+            Context (top-K chunks)
+            <span class="token-badge" id="vectTokenBadge"></span>
+          </div>
+          <div class="context-wrapper" id="vectContextWrapper">
+            <pre class="context-text" id="vectContextText">—</pre>
+            <div class="scan-line hidden" id="vectScanLine"></div>
+          </div>
+        </div>
+
+        <div class="prompt-block">
+          <div class="prompt-block-label">Question</div>
+          <pre class="prompt-text" id="vectQuestion">—</pre>
+        </div>
+
+        <!-- WHAT WE GOT -->
+        <div class="inspector-divider" style="--teal:var(--blue)"><span>📥 What LLM Returned</span></div>
+        <div class="response-box" id="vectResponse">
+          <span class="response-placeholder">Waiting for LLM response…</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Final Answers ─────────────────────────────────────── -->
+  <div class="card hidden" id="resultsCard">
+    <div class="card-title">✨ Final Answers — Side by Side</div>
+    <div class="answers-grid">
+      <div class="answer-box answer-teal">
+        <div class="answer-label teal">🌿 Vectorless RAG (PageIndex)</div>
+        <div class="answer-text" id="vlessAnswer"><span class="answer-placeholder">—</span></div>
+      </div>
+      <div class="answer-box answer-blue">
+        <div class="answer-label blue">🔵 Vector RAG (SimpleVectorStore)</div>
+        <div class="answer-text" id="vectAnswer"><span class="answer-placeholder">—</span></div>
       </div>
     </div>
   </div>
 
 </div>
 
-<!-- ─── JavaScript ─────────────────────────────────────────────────────── -->
+<!-- ── JS modules ─────────────────────────────────────────── -->
+<script src="/js/flow-diagram.js"></script>
+<script src="/js/tree-viz.js"></script>
+<script src="/js/chunk-viz.js"></script>
+<script src="/js/llm-inspector.js"></script>
+<script src="/js/rag-app.js"></script>
+
 <script>
-'use strict';
-
-// ─── State ────────────────────────────────────────────────────────────────
-let state = {
-  configured: false,
-  docId: null,
-  indexing: false,
-  querying: false,
-  tealStepCount: 0,
-  blueStepCount: 0,
-};
-
-// ─── Init ─────────────────────────────────────────────────────────────────
-(async function init() {
-  try {
-    const res = await fetch('/api/config/status');
-    const data = await res.json();
-    if (data.configured) {
-      state.configured = true;
-      setConfigStatus(true, 'Configured — model: ' + data.model);
-      document.getElementById('indexBtn').disabled = false;
-    }
-  } catch (_) {}
-})();
-
-// ─── Config ───────────────────────────────────────────────────────────────
-async function saveConfig() {
-  const apiKey = document.getElementById('apiKeyInput').value.trim();
-  const model  = document.getElementById('modelSelect').value;
-
-  if (!apiKey) { showToast('Please enter your API key', 'error'); return; }
-
-  const btn = document.getElementById('configBtn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-
-  try {
-    const res = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, model }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      state.configured = true;
-      setConfigStatus(true, 'Configured — model: ' + data.model);
-      document.getElementById('indexBtn').disabled = false;
-      showToast('API key saved successfully', 'ok');
-    } else {
-      showToast(data.error || 'Configuration failed', 'error');
-    }
-  } catch (e) {
-    showToast('Network error: ' + e.message, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Save Config';
-  }
-}
-
-function setConfigStatus(ok, msg) {
-  document.getElementById('configStatus').className = 'status-dot' + (ok ? ' ok' : '');
-  document.getElementById('configStatusText').textContent = msg;
-}
-
-// ─── Indexing ──────────────────────────────────────────────────────────────
-function startIndexing() {
-  if (state.indexing) return;
-  const pdfPath = document.getElementById('pdfPathInput').value.trim();
-  if (!pdfPath) { showToast('Please enter a PDF file path', 'error'); return; }
-
-  state.indexing = true;
-  state.docId = null;
-  state.tealStepCount = 0;
-  state.blueStepCount = 0;
-
-  // Reset panels
-  clearPanel('vectorless');
-  clearPanel('vector');
-  showPanel('vectorless');
-  showPanel('vector');
-  setSpinner('teal', true);
-  setSpinner('blue', false);
-  document.getElementById('indexBtn').disabled = true;
-  document.getElementById('indexBtn').textContent = 'Indexing...';
-  document.getElementById('indexProgressWrap').style.display = 'block';
-  document.getElementById('resultsCard').classList.add('hidden');
-  document.getElementById('queryBtn').disabled = true;
-  document.getElementById('questionInput').disabled = true;
-
-  const url = '/api/compare/index?pdfPath=' + encodeURIComponent(pdfPath);
-  // Use fetch with ReadableStream since EventSource only supports GET
-  streamSSE('POST', url, {}, handleIndexEvent, onIndexComplete, onIndexError);
-}
-
-function handleIndexEvent(eventName, data) {
-  const pipeline = data.pipeline;
-
-  if (eventName === 'error') {
-    showToast((data.title || 'Error') + ': ' + (data.detail || ''), 'error');
-    return;
-  }
-
-  if (eventName === 'session') {
-    state.docId = data.docId;
-    return;
-  }
-
-  if (!pipeline) return;
-
-  const isTeal = pipeline === 'vectorless';
-  const color  = isTeal ? 'teal' : 'blue';
-  const listId = isTeal ? 'vectorlessSteps' : 'vectorSteps';
-
-  if (isTeal) {
-    state.tealStepCount++;
-    updateProgress('Teal', Math.min(95, state.tealStepCount * 9));
-  } else {
-    state.blueStepCount++;
-    updateProgress('Blue', Math.min(95, state.blueStepCount * 6));
-  }
-
-  renderPipelineEvent(listId, color, eventName, data);
-  scrollPanel(isTeal ? 'vectorlessBody' : 'vectorBody');
-}
-
-function onIndexComplete() {
-  state.indexing = false;
-  setSpinner('teal', false);
-  setSpinner('blue', false);
-  updateProgress('Teal', 100);
-  updateProgress('Blue', 100);
-  document.getElementById('indexBtn').disabled = false;
-  document.getElementById('indexBtn').textContent = 'Index Document';
-  if (state.docId) {
-    document.getElementById('queryBtn').disabled = false;
-    document.getElementById('questionInput').disabled = false;
-    showToast('Indexing complete! You can now ask questions.', 'ok');
-  }
-}
-
-function onIndexError(err) {
-  state.indexing = false;
-  setSpinner('teal', false);
-  setSpinner('blue', false);
-  document.getElementById('indexBtn').disabled = false;
-  document.getElementById('indexBtn').textContent = 'Index Document';
-  showToast('Indexing error: ' + (err || 'Unknown error'), 'error');
-}
-
-// ─── Query ──────────────────────────────────────────────────────────────────
-function runQuery() {
-  if (state.querying || !state.docId) return;
-  const question = document.getElementById('questionInput').value.trim();
-  if (!question) { showToast('Please enter a question', 'error'); return; }
-
-  state.querying = true;
-
-  // Reset panels (keep indexing steps, add separator)
-  addSeparator('vectorlessSteps', 'teal', 'Query Phase');
-  addSeparator('vectorSteps',     'blue', 'Query Phase');
-  setSpinner('teal', true);
-  setSpinner('blue', true);
-  document.getElementById('queryBtn').disabled = true;
-  document.getElementById('queryBtn').textContent = 'Querying...';
-  document.getElementById('resultsCard').classList.remove('hidden');
-  document.getElementById('vlessAnswer').innerHTML = '<span class="answer-placeholder">Generating answer...</span>';
-  document.getElementById('vectAnswer').innerHTML  = '<span class="answer-placeholder">Generating answer...</span>';
-
-  const url = '/api/compare/query?docId=' + encodeURIComponent(state.docId)
-            + '&question=' + encodeURIComponent(question);
-
-  streamSSE('GET', url, {}, handleQueryEvent, onQueryComplete, onQueryError);
-}
-
-function handleQueryEvent(eventName, data) {
-  if (eventName === 'comparison_complete') {
-    document.getElementById('vlessAnswer').textContent = data.vectorlessAnswer || '(no answer)';
-    document.getElementById('vectAnswer').textContent  = data.vectorAnswer     || '(no answer)';
-    return;
-  }
-
-  const pipeline = data.pipeline;
-  if (!pipeline) return;
-
-  const isTeal = pipeline === 'vectorless';
-  const color  = isTeal ? 'teal' : 'blue';
-  const listId = isTeal ? 'vectorlessSteps' : 'vectorSteps';
-
-  renderPipelineEvent(listId, color, eventName, data);
-  scrollPanel(isTeal ? 'vectorlessBody' : 'vectorBody');
-}
-
-function onQueryComplete() {
-  state.querying = false;
-  setSpinner('teal', false);
-  setSpinner('blue', false);
-  document.getElementById('queryBtn').disabled = false;
-  document.getElementById('queryBtn').textContent = 'Run Query';
-  showToast('Query complete!', 'ok');
-}
-
-function onQueryError(err) {
-  state.querying = false;
-  setSpinner('teal', false);
-  setSpinner('blue', false);
-  document.getElementById('queryBtn').disabled = false;
-  document.getElementById('queryBtn').textContent = 'Run Query';
-  showToast('Query error: ' + (err || 'Unknown'), 'error');
-}
-
-// ─── SSE Streaming via fetch ──────────────────────────────────────────────
-async function streamSSE(method, url, body, onEvent, onDone, onErr) {
-  try {
-    const opts = {
-      method,
-      headers: { 'Accept': 'text/event-stream' },
-    };
-    if (method === 'POST' && body && Object.keys(body).length) {
-      opts.headers['Content-Type'] = 'application/json';
-      opts.body = JSON.stringify(body);
-    }
-
-    const res = await fetch(url, opts);
-    if (!res.ok) {
-      onErr('HTTP ' + res.status);
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE chunks
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line
-
-      let eventName = 'message';
-      let dataLines = [];
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) {
-          eventName = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
-          dataLines.push(line.slice(5).trim());
-        } else if (line === '') {
-          if (dataLines.length) {
-            const rawData = dataLines.join('\n');
-            try {
-              const parsed = JSON.parse(rawData);
-              onEvent(eventName, parsed);
-            } catch (_) {
-              onEvent(eventName, { raw: rawData });
-            }
-            dataLines = [];
-            eventName = 'message';
-          }
-        }
-      }
-    }
-    onDone();
-  } catch (e) {
-    onErr(e.message);
-  }
-}
-
-// ─── Rendering ────────────────────────────────────────────────────────────
-function renderPipelineEvent(listId, color, eventName, data) {
-  const list = document.getElementById(listId);
-
-  const type   = data.type  || eventName;
-  const title  = data.title || eventName;
-  const detail = data.detail || '';
-  const step   = data.step  || 0;
-
-  const icon   = getIcon(type);
-  const isAnswer   = type === 'answer';
-  const isComplete = type === 'indexing_complete';
-  const isError    = type === 'error';
-  const isTreeNode = type === 'tree_node';
-  const isChunk    = type === 'chunk';
-  const isEmbedding = type === 'embedding';
-  const isSimilarity = type === 'similarity_result';
-
-  const item = document.createElement('div');
-  item.className = 'step-item ' + color
-    + (isAnswer   ? ' answer'   : '')
-    + (isComplete ? ' complete' : '')
-    + (isError    ? ' error'    : '');
-
-  // Tree node — special visual
-  if (isTreeNode && data.data) {
-    const node  = data.data;
-    const isRoot = title.startsWith('Root');
-    const nodeEl = document.createElement('div');
-    nodeEl.className = 'tree-node ' + (isRoot ? 'root' : 'child');
-    nodeEl.innerHTML = `
-      <div class="tree-node-bullet"></div>
-      <div class="tree-node-info">
-        <div class="tree-node-title">${esc(node.title || title)}</div>
-        ${node.summary ? `<div class="tree-node-meta">${esc(node.summary)}</div>` : ''}
-      </div>
-      <div class="tree-node-pages">pp.${node.startIndex}&ndash;${node.endIndex}</div>
-    `;
-    list.appendChild(nodeEl);
-    return;
-  }
-
-  // Chunk — special visual
-  if (isChunk) {
-    const chunkEl = document.createElement('div');
-    chunkEl.className = 'chunk-item';
-    const numMatch = title.match(/Chunk (\d+)/);
-    const num = numMatch ? numMatch[1] : '';
-    chunkEl.innerHTML = `
-      <span class="chunk-num">#${esc(num)}</span>
-      <span class="chunk-text">${esc(detail)}</span>
-    `;
-    list.appendChild(chunkEl);
-    return;
-  }
-
-  // Similarity result — with score bar
-  if (isSimilarity) {
-    const scoreMatch = title.match(/Score:\s*([\d.]+)/);
-    const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
-    item.innerHTML = `
-      <span class="step-icon">${icon}</span>
-      <div class="step-content">
-        <div class="step-title">${esc(title)}</div>
-        <div class="score-bar-wrap" style="margin-top:6px">
-          <div class="score-bar" style="width:${Math.round(score*140)}px"></div>
-          <span class="score-val">${score}</span>
-        </div>
-        ${detail ? `<div class="step-detail">${esc(detail)}</div>` : ''}
-      </div>
-      <span class="step-num">#${step}</span>
-    `;
-    list.appendChild(item);
-    return;
-  }
-
-  // Embedding — show vector preview
-  if (isEmbedding) {
-    item.innerHTML = `
-      <span class="step-icon">🔢</span>
-      <div class="step-content">
-        <div class="step-title">${esc(title)}</div>
-        <div class="step-detail code">${esc(detail)}</div>
-      </div>
-      <span class="step-num">#${step}</span>
-    `;
-    list.appendChild(item);
-    return;
-  }
-
-  // Answer — larger display
-  if (isAnswer) {
-    item.innerHTML = `
-      <span class="step-icon">✨</span>
-      <div class="step-content">
-        <div class="step-title">${esc(title)}</div>
-        <div class="step-detail" style="margin-top:8px;font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">${esc(detail)}</div>
-      </div>
-    `;
-    list.appendChild(item);
-    return;
-  }
-
-  // Default
-  item.innerHTML = `
-    <span class="step-icon">${icon}</span>
-    <div class="step-content">
-      <div class="step-title">${esc(title)}</div>
-      ${detail ? `<div class="step-detail">${esc(detail)}</div>` : ''}
-    </div>
-    ${step ? `<span class="step-num">#${step}</span>` : ''}
-  `;
-  list.appendChild(item);
-}
-
-function getIcon(type) {
-  const icons = {
-    phase: '⚡', pages_parsed: '📄', toc_detected: '📑',
-    tree_node: '🌿', verification: '✅', indexing_complete: '🎉',
-    query_started: '💬', navigation: '🧭', pages_fetched: '📥',
-    answer: '✨', error: '❌', query_embedding: '🔢',
-    similarity: '📐', similarity_result: '🎯', chunks_selected: '📦',
-    embedding: '🔢', chunk: '📝', session: '🔗', complete: '✅',
-    phase_complete: '✅',
+  // Show tree SVG container once tree data arrives
+  const _origDrawTree = TreeViz.prototype.drawTree;
+  TreeViz.prototype.drawTree = function(nodes) {
+    _origDrawTree.call(this, nodes);
+    const scroll = document.getElementById('treeScroll');
+    const empty  = document.getElementById('vlessEmptyViz');
+    if (scroll) scroll.style.display = 'block';
+    if (empty)  empty.style.display  = 'none';
   };
-  return icons[type] || '▸';
-}
 
-function esc(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// ─── Panel utilities ──────────────────────────────────────────────────────
-function clearPanel(pipeline) {
-  const id  = pipeline === 'vectorless' ? 'vectorlessSteps' : 'vectorSteps';
-  const el  = document.getElementById(id);
-  el.innerHTML = '';
-}
-
-function showPanel(pipeline) {
-  const emptyId = pipeline === 'vectorless' ? 'vectorlessEmpty' : 'vectorEmpty';
-  const stepsId = pipeline === 'vectorless' ? 'vectorlessSteps' : 'vectorSteps';
-  document.getElementById(emptyId).style.display = 'none';
-  document.getElementById(stepsId).style.display = 'flex';
-}
-
-function scrollPanel(bodyId) {
-  const el = document.getElementById(bodyId);
-  el.scrollTop = el.scrollHeight;
-}
-
-function setSpinner(color, active) {
-  const el = document.getElementById('spinner' + (color === 'teal' ? 'Teal' : 'Blue'));
-  el.className = 'panel-spinner ' + color + (active ? ' active' : '');
-}
-
-function updateProgress(color, pct) {
-  const id = 'progress' + color;
-  const el = document.getElementById(id);
-  if (el) el.style.width = pct + '%';
-}
-
-function addSeparator(listId, color, label) {
-  const list = document.getElementById(listId);
-  const sep  = document.createElement('div');
-  sep.style.cssText = 'display:flex;align-items:center;gap:8px;margin:8px 0';
-  sep.innerHTML = `
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-    <span class="phase-header ${color}">${esc(label)}</span>
-    <div style="flex:1;height:1px;background:var(--border)"></div>
-  `;
-  list.appendChild(sep);
-}
-
-// ─── Toast ────────────────────────────────────────────────────────────────
-let toastTimer = null;
-function showToast(msg, type = 'info') {
-  let el = document.getElementById('toast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'toast';
-    document.body.appendChild(el);
-  }
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  el.style.display = 'block';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
-}
-
-// ─── Enter key on question ───────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('questionInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !document.getElementById('queryBtn').disabled) runQuery();
-  });
-  document.getElementById('apiKeyInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') saveConfig();
-  });
-});
+  // Show chunk grid once first chunk arrives
+  const _origAddChunk = ChunkViz.prototype._addChunk;
+  ChunkViz.prototype._addChunk = function(d) {
+    _origAddChunk.call(this, d);
+    document.getElementById('vectEmptyViz').style.display = 'none';
+  };
 </script>
 </body>
 </html>

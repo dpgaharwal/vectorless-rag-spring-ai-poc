@@ -3,12 +3,13 @@ spring:
     name: vectorless-rag-poc
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/vectorrag
+    url: jdbc:postgresql://localhost:5433/vectorrag   # docker-compose maps host 5433 → container 5432
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
 
   jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
     open-in-view: false
